@@ -1193,12 +1193,24 @@ function joinURL(){
   u.search=''; u.hash='';
   return u.toString();
 }
+// Relays let phones connect from a different network than the host.
+const ICE={iceServers:[
+  {urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']},
+  {urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turns:openrelay.metered.ca:443?transport=tcp'],
+   username:'openrelayproject',credential:'openrelayproject'}
+]};
+
 function initNet(){
-  peer=new Peer('apexrace-'+code,{debug:0});
+  peer=new Peer('apexrace-'+code,{debug:0,config:ICE});
   peer.on('open',()=>{ $('#netState').textContent='Ready for players'; });
-  peer.on('error',e=>{ $('#netState').textContent='Network: '+e.type; });
+  peer.on('error',e=>{
+    if(e.type==='unavailable-id'){ $('#netState').textContent='Code in use — reload for a new one'; return; }
+    $('#netState').textContent='Network: '+e.type;
+  });
   peer.on('connection',conn=>{
+    $('#netState').textContent='A player is connecting…';
     conn.on('open',()=>{
+      $('#netState').textContent='Ready for players';
       conn.on('data',d=>onData(conn,d));
       conn.on('close',()=>{ const p=players.get(conn.peer); if(p){p.gone=true;} renderRoster(); });
       conn.send({t:'hello',phase:state.phase});
