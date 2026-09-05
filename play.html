@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#070C12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>APEX — Player</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#070C12;--panel:#0E161F;--line:#1E2E3D;--amber:#FFB03A;--sodium:#FF7A18;--tele:#57E2E5;--text:#DCE6F0;--dim:#7B8FA3}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:var(--ink);color:var(--text);
+    font-family:Barlow,system-ui,sans-serif;touch-action:none;overscroll-behavior:none;user-select:none}
+  .screen{position:fixed;inset:0;display:none;flex-direction:column}
+  .screen.on{display:flex}
+
+  /* ---- join ---- */
+  #join{padding:max(6vh,26px) 24px 26px;gap:22px;justify-content:center;
+    background:radial-gradient(700px 420px at 30% 0%,#14283A 0%,transparent 65%),var(--ink)}
+  .mark{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:64px;line-height:.85;letter-spacing:-.01em}
+  .mark span{color:var(--sodium)}
+  .hint{color:var(--dim);font-size:16px;line-height:1.5;max-width:34ch}
+  label{display:block;font-size:14px;color:var(--dim);margin-bottom:7px}
+  input{width:100%;background:#0B131C;border:1px solid var(--line);border-radius:2px;color:var(--text);
+    font-family:'Barlow Condensed',sans-serif;font-size:32px;padding:12px 16px;outline:none}
+  input:focus{border-color:var(--sodium)}
+  #codeIn{letter-spacing:.34em;text-transform:uppercase}
+  .go{width:100%;border:0;border-radius:2px;background:var(--sodium);color:#100600;
+    font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:30px;letter-spacing:.05em;padding:16px}
+  .go:disabled{background:#243040;color:#5C6E80}
+  #joinMsg{color:var(--amber);font-size:15px;min-height:20px}
+
+  /* ---- waiting ---- */
+  #wait{align-items:center;justify-content:center;gap:16px;text-align:center;padding:30px}
+  #wait .big{font-family:'Barlow Condensed',sans-serif;font-size:44px;line-height:1}
+  .dot{width:12px;height:36px;border-radius:1px;background:var(--sodium)}
+  .rotate{display:none;align-items:center;gap:12px;color:var(--dim);font-size:16px}
+
+  /* ---- drive: phone ---- */
+  #drive{position:fixed;inset:0;display:none}
+  #drive.on{display:block}
+  .pad{position:absolute;top:0;bottom:0;width:34%;display:flex;align-items:center;justify-content:center;
+    font-family:'Barlow Condensed',sans-serif;font-size:30px;letter-spacing:.1em;color:var(--dim);
+    border:2px solid transparent;transition:background .08s,color .08s}
+  #padBrake{left:0;background:linear-gradient(90deg,rgba(255,59,59,.14),transparent)}
+  #padGas{right:0;background:linear-gradient(-90deg,rgba(87,226,229,.14),transparent)}
+  #padBrake.hit{background:rgba(255,59,59,.42);color:#fff}
+  #padGas.hit{background:rgba(87,226,229,.38);color:#04121A}
+
+  .center{position:absolute;left:34%;right:34%;top:0;bottom:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:6px;text-align:center}
+  .spd{font-family:'Barlow Condensed',sans-serif;font-size:76px;line-height:.8;font-variant-numeric:tabular-nums}
+  .spdu{font-size:12px;color:var(--dim);letter-spacing:.2em}
+  .gearpos{display:flex;gap:16px;align-items:baseline;font-family:'Barlow Condensed',sans-serif;margin-top:4px}
+  .gearpos .g{font-size:30px;color:var(--amber)}
+  .gearpos .p{font-size:22px;color:var(--dim)}
+  .wheel{width:118px;height:6px;background:#16222E;margin-top:14px;position:relative;border-radius:3px}
+  .wheel i{position:absolute;top:-4px;width:14px;height:14px;border-radius:50%;background:var(--tele);
+    left:50%;transform:translateX(-50%)}
+  .rpmbar{width:118px;height:3px;background:#16222E;margin-top:10px}
+  .rpmbar i{display:block;height:100%;width:0;background:var(--tele)}
+  .rpmbar.red i{background:#FF3B3B}
+
+  .mini{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;gap:8px;z-index:3}
+  .mini button{background:rgba(14,22,31,.9);border:1px solid var(--line);color:var(--dim);
+    font-family:'Barlow Condensed',sans-serif;font-size:15px;letter-spacing:.06em;padding:7px 14px;border-radius:2px}
+  .mini button.act{border-color:var(--amber);color:var(--amber)}
+  #banner{position:absolute;left:0;right:0;top:8px;text-align:center;font-family:'Barlow Condensed',sans-serif;
+    font-size:26px;color:var(--amber);pointer-events:none;opacity:0;transition:opacity .2s}
+  #banner.on{opacity:1}
+
+  /* ---- drive: keyboard ---- */
+  #keys{display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:22px}
+  #keys.on{display:flex}
+  .kgrid{display:grid;grid-template-columns:repeat(3,66px);grid-template-rows:repeat(2,66px);gap:8px}
+  .key{border:1px solid var(--line);border-radius:3px;display:grid;place-items:center;
+    font-family:'Barlow Condensed',sans-serif;font-size:26px;color:var(--dim)}
+  .key.on{background:var(--sodium);color:#100600;border-color:var(--sodium)}
+  .key.w{grid-column:2}
+  .key.space{grid-column:1/4;font-size:18px;height:44px}
+</style>
+</head>
+<body>
+
+<div class="screen on" id="join">
+  <div>
+    <div class="mark">APEX<span>.</span></div>
+    <div class="hint" id="deviceHint">Turn your phone sideways once you're in. Tilt it like a wheel to steer.</div>
+  </div>
+  <div>
+    <label for="codeIn">Room code from the host screen</label>
+    <input id="codeIn" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="····">
+  </div>
+  <div>
+    <label for="nameIn">Your name</label>
+    <input id="nameIn" maxlength="14" autocomplete="off" placeholder="Driver">
+  </div>
+  <button class="go" id="joinBtn">Join race</button>
+  <div id="joinMsg"></div>
+</div>
+
+<div class="screen" id="wait">
+  <div class="dot"></div>
+  <div class="big" id="waitTitle">You're on the grid</div>
+  <div class="hint" id="waitSub" style="text-align:center">Waiting for the host to start.</div>
+  <div class="rotate" id="rotateHint">↻ Turn your phone sideways</div>
+  <button class="go" id="tiltBtn" style="display:none;max-width:320px">Turn on tilt steering</button>
+</div>
+
+<div id="drive">
+  <div class="pad" id="padBrake">BRAKE</div>
+  <div class="pad" id="padGas">GAS</div>
+  <div class="center" id="phoneCenter">
+    <div class="spd" id="spd">0</div>
+    <div class="spdu">KM/H</div>
+    <div class="gearpos"><span class="g" id="gear">N</span><span class="p" id="posn">P1</span></div>
+    <div class="wheel"><i id="wheelDot"></i></div>
+    <div class="rpmbar" id="rpmbar"><i></i></div>
+  </div>
+  <div id="keys">
+    <div class="spd" id="spdK">0</div>
+    <div class="spdu">KM/H · <span id="gearK">N</span> · <span id="posK">P1</span></div>
+    <div class="kgrid">
+      <div class="key w" id="kW">W</div>
+      <div class="key" id="kA">A</div><div class="key" id="kS">S</div><div class="key" id="kD">D</div>
+      <div class="key space" id="kSpace">SPACE — handbrake</div>
+    </div>
+  </div>
+  <div id="banner"></div>
+  <div class="mini">
+    <button id="recenter">Recentre</button>
+    <button id="invert">Flip steering</button>
+    <button id="resetCar">Reset car</button>
+    <button id="sens">Sensitivity: 30°</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const isTouch=matchMedia('(pointer:coarse)').matches||'ontouchstart' in window;
+
+let conn=null,peer=null,connected=false;
+let tiltOn=false, zero=0, invertSteer=1, sensDeg=30;
+const SENS=[20,30,45,60];
+let input={s:0,a:0,b:0,h:0,r:0};
+
+/* ---------- join ---------- */
+$('#deviceHint').textContent = isTouch
+  ? "Turn your phone sideways once you're in. Tilt it like a wheel to steer."
+  : "Steer with A and D, accelerate with W, brake with S, handbrake on space.";
+
+const hash=location.hash.replace('#','').toUpperCase();
+if(/^[A-Z0-9]{4}$/.test(hash)) $('#codeIn').value=hash;
+
+$('#codeIn').addEventListener('input',e=>{e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'');});
+$('#joinBtn').onclick=()=>{
+  const code=$('#codeIn').value.trim().toUpperCase();
+  if(code.length!==4){ $('#joinMsg').textContent='The code is four characters, like the one on the host screen.'; return; }
+  connect(code,$('#nameIn').value.trim()||'Driver');
+};
+
+function connect(code,name){
+  $('#joinBtn').disabled=true;
+  $('#joinMsg').textContent='Connecting…';
+  peer=new Peer(undefined,{debug:0});
+  const fail=setTimeout(()=>{
+    if(!connected){ $('#joinMsg').textContent="Couldn't reach that room. Check the code and that the host screen is open."; $('#joinBtn').disabled=false; }
+  },9000);
+
+  peer.on('open',()=>{
+    conn=peer.connect('apexrace-'+code,{reliable:false,serialization:'json'});
+    conn.on('open',()=>{
+      connected=true; clearTimeout(fail);
+      conn.send({t:'join',name,device:isTouch?'phone':'keys'});
+      showWait();
+      startSending();
+    });
+    conn.on('data',onData);
+    conn.on('close',()=>{ $('#waitTitle').textContent='Disconnected'; $('#waitSub').textContent='Reload this page to rejoin.'; show('wait'); });
+    conn.on('error',()=>{});
+  });
+  peer.on('error',e=>{
+    clearTimeout(fail);
+    $('#joinMsg').textContent = e.type==='peer-unavailable'
+      ? 'No room with that code is open right now.' : 'Network trouble: '+e.type;
+    $('#joinBtn').disabled=false;
+  });
+}
+
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  $('#drive').classList.remove('on');
+  if(id==='drive') $('#drive').classList.add('on'); else $('#'+id).classList.add('on');
+}
+function showWait(){
+  show('wait');
+  if(isTouch){
+    $('#rotateHint').style.display= isPortrait()?'flex':'none';
+    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+      $('#tiltBtn').style.display='block';
+    } else { enableTilt(); }
+  }
+}
+const isPortrait=()=>innerHeight>innerWidth;
+addEventListener('resize',()=>{ if(isTouch) $('#rotateHint').style.display=isPortrait()?'flex':'none'; });
+
+$('#tiltBtn').onclick=async()=>{
+  try{
+    const r=await DeviceOrientationEvent.requestPermission();
+    if(r==='granted'){ enableTilt(); $('#tiltBtn').style.display='none'; }
+    else $('#waitSub').textContent='Tilt is blocked, so a slider will appear instead. You can also flip this in Settings › Safari › Motion & Orientation Access.';
+  }catch(e){ enableTilt(); $('#tiltBtn').style.display='none'; }
+};
+
+/* ---------- tilt steering ---------- */
+let rawAngle=0;
+function enableTilt(){
+  if(tiltOn) return;
+  tiltOn=true;
+  addEventListener('deviceorientation',e=>{
+    if(e.beta===null&&e.gamma===null) return;
+    const b=(e.beta||0)*Math.PI/180, g=(e.gamma||0)*Math.PI/180;
+    // gravity direction in device axes
+    const gx=-Math.cos(b)*Math.sin(g);
+    const gy=-Math.sin(b);
+    // rotate into screen axes
+    const so=((screen.orientation&&screen.orientation.angle)||window.orientation||0)*Math.PI/180;
+    const sx= gx*Math.cos(so)+gy*Math.sin(so);
+    const sy=-gx*Math.sin(so)+gy*Math.cos(so);
+    rawAngle=Math.atan2(sx,-sy);
+  },true);
+  setTimeout(recentre,600);
+}
+function recentre(){ zero=rawAngle; buzz(12); }
+function steerFromTilt(){
+  let d=rawAngle-zero;
+  while(d>Math.PI) d-=2*Math.PI;
+  while(d<-Math.PI) d+=2*Math.PI;
+  const max=sensDeg*Math.PI/180;
+  return clamp(d/max,-1,1)*invertSteer;
+}
+const buzz=ms=>{ try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){} };
+
+/* ---------- pads ---------- */
+function bindPad(el,set){
+  const on=e=>{e.preventDefault();el.classList.add('hit');set(1);};
+  const off=e=>{e.preventDefault();el.classList.remove('hit');set(0);};
+  el.addEventListener('touchstart',on,{passive:false});
+  el.addEventListener('touchend',off,{passive:false});
+  el.addEventListener('touchcancel',off,{passive:false});
+  el.addEventListener('mousedown',on); addEventListener('mouseup',off);
+}
+bindPad($('#padGas'),v=>input.a=v);
+bindPad($('#padBrake'),v=>input.b=v);
+
+$('#recenter').onclick=recentre;
+$('#invert').onclick=e=>{ invertSteer*=-1; e.target.classList.toggle('act',invertSteer<0); buzz(10); };
+$('#resetCar').onclick=()=>{ input.r=1; buzz(25); };
+$('#sens').onclick=e=>{ sensDeg=SENS[(SENS.indexOf(sensDeg)+1)%SENS.length]; e.target.textContent='Sensitivity: '+sensDeg+'°'; };
+
+/* ---------- keyboard ---------- */
+const held={};
+const KEYMAP={w:'kW',a:'kA',s:'kS',d:'kD',' ':'kSpace',
+  arrowup:'kW',arrowleft:'kA',arrowdown:'kS',arrowright:'kD'};
+addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(KEYMAP[k]){ e.preventDefault(); held[k]=1; $('#'+KEYMAP[k]).classList.add('on'); }
+  if(k==='r') input.r=1;
+});
+addEventListener('keyup',e=>{
+  const k=e.key.toLowerCase();
+  if(KEYMAP[k]){ held[k]=0; $('#'+KEYMAP[k]).classList.remove('on'); }
+});
+let kSteer=0;
+function keyboardInput(dt){
+  const left=held['a']||held['arrowleft'], right=held['d']||held['arrowright'];
+  const t=(right?1:0)-(left?1:0);
+  kSteer+= clamp(t-kSteer, -4.5*dt, 4.5*dt);
+  if(!t) kSteer*=Math.exp(-7*dt);
+  input.s=clamp(kSteer,-1,1);
+  input.a=(held['w']||held['arrowup'])?1:0;
+  input.b=(held['s']||held['arrowdown'])?1:0;
+  input.h=held[' ']?1:0;
+}
+
+/* ---------- send loop ---------- */
+let lastT=performance.now();
+function startSending(){
+  setInterval(()=>{
+    const now=performance.now(); const dt=Math.min(.1,(now-lastT)/1000); lastT=now;
+    if(isTouch){ if(tiltOn) input.s=steerFromTilt(); }
+    else keyboardInput(dt);
+    $('#wheelDot').style.left=(50+input.s*44)+'%';
+    if(conn&&conn.open){
+      conn.send({t:'in',s:+input.s.toFixed(3),a:input.a,b:input.b,h:input.h,r:input.r});
+      input.r=0;
+    }
+  },33);
+}
+
+/* ---------- host messages ---------- */
+let lastCrash=0;
+function onData(d){
+  if(d.t==='joined'){ document.documentElement.style.setProperty('--sodium',d.color); }
+  if(d.t==='start'){ show('drive'); $('#keys').classList.toggle('on',!isTouch);
+    $('#phoneCenter').style.display=isTouch?'flex':'none';
+    document.querySelector('.mini').style.display=isTouch?'flex':'none';
+    document.querySelectorAll('.pad').forEach(p=>p.style.display=isTouch?'flex':'none');
+    if(isTouch&&tiltOn) recentre();
+    banner('GET READY');
+  }
+  if(d.t==='go'){ banner('GO'); buzz([40,40,120]); }
+  if(d.t==='finish'){ show('wait'); $('#waitTitle').textContent='Race over'; $('#waitSub').textContent='Check the big screen for the finishing order.'; }
+  if(d.t==='lobby'){ show('wait'); $('#waitTitle').textContent="You're on the grid"; $('#waitSub').textContent='Waiting for the host to start.'; }
+  if(d.t==='tel'){
+    $('#spd').textContent=d.v; $('#spdK').textContent=d.v;
+    $('#gear').textContent=d.g; $('#gearK').textContent=d.g;
+    $('#posn').textContent='P'+d.pos; $('#posK').textContent='P'+d.pos;
+    const bar=$('#rpmbar'); bar.firstElementChild.style.width=(d.rpm/8000*100)+'%';
+    bar.classList.toggle('red',d.rpm>7100);
+    if(d.crash&&Date.now()-lastCrash>700){ lastCrash=Date.now(); buzz(180); banner('CRASH',700); }
+    else if(d.air&&Date.now()-lastCrash>900){ lastCrash=Date.now(); buzz(30); }
+  }
+}
+let bannerT=null;
+function banner(text,ms=1400){
+  const b=$('#banner'); b.textContent=text; b.classList.add('on');
+  clearTimeout(bannerT); bannerT=setTimeout(()=>b.classList.remove('on'),ms);
+}
+
+document.addEventListener('gesturestart',e=>e.preventDefault());
+document.addEventListener('dblclick',e=>e.preventDefault(),{passive:false});
+</script>
+</body>
+</html>
