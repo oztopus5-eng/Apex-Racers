@@ -173,7 +173,7 @@ function setMode(m){
   document.querySelectorAll('.key').forEach(k=>k.classList.remove('on'));
 }
 
-let conn=null,peer=null,connected=false;
+let conn=null,peer=null,connected=false,joined=false,joinRetry=null;
 let tiltOn=false, zero=0, invertSteer=1, sensDeg=30;
 const SENS=[20,30,45,60];
 let input={s:0,a:0,b:0,h:0,r:0};
@@ -219,7 +219,18 @@ function connect(code,name){
     },700);
     conn.on('open',()=>{
       connected=true; clearTimeout(fail);
-      conn.send({t:'join',name,device:mode==='tilt'?'phone':'keys'});
+      /* Re-send until the host acks with {t:'joined'}. The very first message
+         can beat the host's listener into existence and get dropped. */
+      const send=()=>{ try{ conn.send({t:'join',name,device:mode==='tilt'?'phone':'keys'}); }catch(e){} };
+      send();
+      joinRetry=setInterval(()=>{ if(joined){ clearInterval(joinRetry); return; } send(); },600);
+      setTimeout(()=>{
+        clearInterval(joinRetry);
+        if(!joined){
+          $('#waitTitle').textContent='The host never answered';
+          $('#waitSub').textContent='The connection opened but the host screen did not add you to the grid. Reload the host page, then reload this one.';
+        }
+      },15000);
       showWait();
       startSending();
     });
@@ -361,7 +372,12 @@ function startSending(){
 /* ---------- host messages ---------- */
 let lastCrash=0;
 function onData(d){
-  if(d.t==='joined'){ document.documentElement.style.setProperty('--sodium',d.color); }
+  if(d.t==='joined'){
+    joined=true; clearInterval(joinRetry);
+    document.documentElement.style.setProperty('--sodium',d.color);
+    $('#waitTitle').textContent="You're on the grid";
+    $('#waitSub').textContent='Car '+(d.slot||'?')+' is yours. Waiting for the host to start.';
+  }
   if(d.t==='start'){ show('drive'); driving=true; setMode(mode);
     if(mode==='tilt'&&tiltOn) recentre();
     banner('GET READY');

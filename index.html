@@ -1212,16 +1212,29 @@ function initNet(){
   });
   peer.on('connection',conn=>{
     $('#netState').textContent='A player is connecting…';
+    /* Attach listeners NOW, synchronously. If we wait for 'open' the peer's
+       first message can arrive before the handler exists and be dropped. */
+    conn.on('data',d=>onData(conn,d));
+    conn.on('close',()=>{ const p=players.get(conn.peer); if(p){p.gone=true;} renderRoster(); });
+    conn.on('error',()=>{});
     conn.on('open',()=>{
       $('#netState').textContent='Ready for players';
-      conn.on('data',d=>onData(conn,d));
-      conn.on('close',()=>{ const p=players.get(conn.peer); if(p){p.gone=true;} renderRoster(); });
       conn.send({t:'hello',phase:state.phase});
     });
   });
 }
 function onData(conn,d){
   if(d.t==='join'){
+    /* The phone re-sends 'join' until it hears back, so a repeat is normal:
+       re-acknowledge the existing player instead of creating a duplicate. */
+    const existing=players.get(conn.peer);
+    if(existing){
+      existing.gone=false; existing.conn=conn;
+      const slot=[...players.keys()].indexOf(conn.peer);
+      conn.send({t:'joined',color:'#'+existing.color.toString(16).padStart(6,'0'),slot:slot+1});
+      renderRoster();
+      return;
+    }
     const idx=players.size;
     players.set(conn.peer,{
       id:conn.peer,name:(d.name||'Driver').slice(0,14),device:d.device||'phone',conn,
