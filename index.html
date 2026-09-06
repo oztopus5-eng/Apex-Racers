@@ -1193,11 +1193,13 @@ function joinURL(){
   u.search=''; u.hash='';
   return u.toString();
 }
-// Relays let phones connect from a different network than the host.
+/* If a phone still can't connect, grab a free TURN key at metered.ca
+   (two minutes, no card) and paste the values here AND in play.html. */
+const TURN={host:'staticauth.openrelay.metered.ca',user:'openrelayproject',pass:'openrelayproject'};
 const ICE={iceServers:[
-  {urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']},
-  {urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turns:openrelay.metered.ca:443?transport=tcp'],
-   username:'openrelayproject',credential:'openrelayproject'}
+  {urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.cloudflare.com:3478']},
+  {urls:[`turn:${TURN.host}:80`,`turn:${TURN.host}:443`,`turns:${TURN.host}:443?transport=tcp`],
+   username:TURN.user,credential:TURN.pass}
 ]};
 
 function initNet(){

@@ -31,6 +31,10 @@
     font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:30px;letter-spacing:.05em;padding:16px}
   .go:disabled{background:#243040;color:#5C6E80}
   #joinMsg{color:var(--amber);font-size:15px;min-height:20px}
+  #modePick{display:flex;gap:8px}
+  #modePick button{flex:1;background:#0B131C;border:1px solid var(--line);color:var(--dim);border-radius:2px;
+    font-family:'Barlow Condensed',sans-serif;font-size:20px;padding:12px 8px}
+  #modePick button.act{border-color:var(--sodium);color:var(--text);background:rgba(255,122,24,.1)}
 
   /* ---- waiting ---- */
   #wait{align-items:center;justify-content:center;gap:16px;text-align:center;padding:30px}
@@ -97,6 +101,13 @@
     <label for="nameIn">Your name</label>
     <input id="nameIn" maxlength="14" autocomplete="off" placeholder="Driver">
   </div>
+  <div>
+    <label>How do you want to drive?</label>
+    <div id="modePick">
+      <button data-m="tilt">Tilt this phone</button>
+      <button data-m="keys">Keyboard · WASD</button>
+    </div>
+  </div>
   <button class="go" id="joinBtn">Join race</button>
   <div id="joinMsg"></div>
 </div>
@@ -142,6 +153,23 @@
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const isTouch=matchMedia('(pointer:coarse)').matches||'ontouchstart' in window;
+let mode = isTouch?'tilt':'keys';
+
+function setMode(m){
+  mode=m;
+  const tilt=m==='tilt';
+  document.querySelectorAll('#modePick button').forEach(b=>b.classList.toggle('act',b.dataset.m===m));
+  $('#deviceHint').textContent = tilt
+    ? "Turn your phone sideways once you're in. Tilt it like a wheel to steer."
+    : "Steer with A and D, accelerate with W, brake with S, handbrake on space.";
+  $('#keys').classList.toggle('on',!tilt);
+  $('#phoneCenter').style.display=tilt?'flex':'none';
+  document.querySelector('.mini').style.display=tilt?'flex':'none';
+  document.querySelectorAll('.pad').forEach(p=>p.style.display=tilt?'flex':'none');
+  if(tilt&&driving) enableTilt();
+  held.w=held.a=held.s=held.d=held[' ']=0;
+  document.querySelectorAll('.key').forEach(k=>k.classList.remove('on'));
+}
 
 let conn=null,peer=null,connected=false;
 let tiltOn=false, zero=0, invertSteer=1, sensDeg=30;
@@ -149,9 +177,8 @@ const SENS=[20,30,45,60];
 let input={s:0,a:0,b:0,h:0,r:0};
 
 /* ---------- join ---------- */
-$('#deviceHint').textContent = isTouch
-  ? "Turn your phone sideways once you're in. Tilt it like a wheel to steer."
-  : "Steer with A and D, accelerate with W, brake with S, handbrake on space.";
+document.querySelectorAll('#modePick button').forEach(b=>b.onclick=()=>setMode(b.dataset.m));
+setMode(mode);
 
 const hash=location.hash.replace('#','').toUpperCase();
 if(/^[A-Z0-9]{4}$/.test(hash)) $('#codeIn').value=hash;
@@ -163,10 +190,11 @@ $('#joinBtn').onclick=()=>{
   connect(code,$('#nameIn').value.trim()||'Driver');
 };
 
+const TURN={host:'staticauth.openrelay.metered.ca',user:'openrelayproject',pass:'openrelayproject'};
 const ICE={iceServers:[
-  {urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']},
-  {urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turns:openrelay.metered.ca:443?transport=tcp'],
-   username:'openrelayproject',credential:'openrelayproject'}
+  {urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.cloudflare.com:3478']},
+  {urls:[`turn:${TURN.host}:80`,`turn:${TURN.host}:443`,`turns:${TURN.host}:443?transport=tcp`],
+   username:TURN.user,credential:TURN.pass}
 ]};
 
 function connect(code,name){
@@ -175,16 +203,21 @@ function connect(code,name){
   peer=new Peer(undefined,{debug:0,config:ICE});
   const fail=setTimeout(()=>{
     if(!connected){
-      $('#joinMsg').textContent="Found the room but the link wouldn't open. Put this phone on the same Wi-Fi as the host screen and try again.";
+      $('#joinMsg').textContent="The room answered but the connection never opened. This network is probably blocking device-to-device traffic — try a phone hotspot for both screens.";
       $('#joinBtn').disabled=false;
     }
   },16000);
 
   peer.on('open',()=>{
     conn=peer.connect('apexrace-'+code);
+    const watch=setInterval(()=>{
+      const pc=conn&&conn.peerConnection;
+      if(connected||!pc){ if(connected) clearInterval(watch); return; }
+      $('#joinMsg').textContent='Connecting… '+pc.iceConnectionState;
+    },700);
     conn.on('open',()=>{
       connected=true; clearTimeout(fail);
-      conn.send({t:'join',name,device:isTouch?'phone':'keys'});
+      conn.send({t:'join',name,device:mode==='tilt'?'phone':'keys'});
       showWait();
       startSending();
     });
@@ -207,15 +240,18 @@ function show(id){
 }
 function showWait(){
   show('wait');
-  if(isTouch){
+  if(mode==='tilt'){
     $('#rotateHint').style.display= isPortrait()?'flex':'none';
     if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
       $('#tiltBtn').style.display='block';
     } else { enableTilt(); }
+  } else {
+    $('#rotateHint').style.display='none'; $('#tiltBtn').style.display='none';
+    $('#waitSub').textContent='Waiting for the host to start. W accelerates, S brakes, A and D steer.';
   }
 }
 const isPortrait=()=>innerHeight>innerWidth;
-addEventListener('resize',()=>{ if(isTouch) $('#rotateHint').style.display=isPortrait()?'flex':'none'; });
+addEventListener('resize',()=>{ if(mode==='tilt') $('#rotateHint').style.display=isPortrait()?'flex':'none'; });
 
 $('#tiltBtn').onclick=async()=>{
   try{
@@ -275,12 +311,23 @@ $('#sens').onclick=e=>{ sensDeg=SENS[(SENS.indexOf(sensDeg)+1)%SENS.length]; e.t
 const held={};
 const KEYMAP={w:'kW',a:'kA',s:'kS',d:'kD',' ':'kSpace',
   arrowup:'kW',arrowleft:'kA',arrowdown:'kS',arrowright:'kD'};
+let driving=false;
+const typingInField=e=>{
+  const t=e.target;
+  return t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable);
+};
 addEventListener('keydown',e=>{
+  if(typingInField(e)) return;              // let people type WASD into the code box
   const k=e.key.toLowerCase();
-  if(KEYMAP[k]){ e.preventDefault(); held[k]=1; $('#'+KEYMAP[k]).classList.add('on'); }
-  if(k==='r') input.r=1;
+  if(KEYMAP[k]){
+    if(!driving) return;
+    if(mode!=='keys') setMode('keys');      // touching a key switches you to keyboard
+    e.preventDefault(); held[k]=1; $('#'+KEYMAP[k]).classList.add('on');
+  }
+  if(k==='r'&&driving) input.r=1;
 });
 addEventListener('keyup',e=>{
+  if(typingInField(e)) return;
   const k=e.key.toLowerCase();
   if(KEYMAP[k]){ held[k]=0; $('#'+KEYMAP[k]).classList.remove('on'); }
 });
@@ -301,7 +348,7 @@ let lastT=performance.now();
 function startSending(){
   setInterval(()=>{
     const now=performance.now(); const dt=Math.min(.1,(now-lastT)/1000); lastT=now;
-    if(isTouch){ if(tiltOn) input.s=steerFromTilt(); }
+    if(mode==='tilt'){ if(tiltOn) input.s=steerFromTilt(); }
     else keyboardInput(dt);
     $('#wheelDot').style.left=(50+input.s*44)+'%';
     if(conn&&conn.open){
@@ -315,16 +362,13 @@ function startSending(){
 let lastCrash=0;
 function onData(d){
   if(d.t==='joined'){ document.documentElement.style.setProperty('--sodium',d.color); }
-  if(d.t==='start'){ show('drive'); $('#keys').classList.toggle('on',!isTouch);
-    $('#phoneCenter').style.display=isTouch?'flex':'none';
-    document.querySelector('.mini').style.display=isTouch?'flex':'none';
-    document.querySelectorAll('.pad').forEach(p=>p.style.display=isTouch?'flex':'none');
-    if(isTouch&&tiltOn) recentre();
+  if(d.t==='start'){ show('drive'); driving=true; setMode(mode);
+    if(mode==='tilt'&&tiltOn) recentre();
     banner('GET READY');
   }
   if(d.t==='go'){ banner('GO'); buzz([40,40,120]); }
-  if(d.t==='finish'){ show('wait'); $('#waitTitle').textContent='Race over'; $('#waitSub').textContent='Check the big screen for the finishing order.'; }
-  if(d.t==='lobby'){ show('wait'); $('#waitTitle').textContent="You're on the grid"; $('#waitSub').textContent='Waiting for the host to start.'; }
+  if(d.t==='finish'){ driving=false; show('wait'); $('#waitTitle').textContent='Race over'; $('#waitSub').textContent='Check the big screen for the finishing order.'; }
+  if(d.t==='lobby'){ driving=false; show('wait'); $('#waitTitle').textContent="You're on the grid"; $('#waitSub').textContent='Waiting for the host to start.'; }
   if(d.t==='tel'){
     $('#spd').textContent=d.v; $('#spdK').textContent=d.v;
     $('#gear').textContent=d.g; $('#gearK').textContent=d.g;
