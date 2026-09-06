@@ -185,6 +185,7 @@
 
     <div class="controls">
       <button class="btn" id="startBtn" disabled>Start race</button>
+      <button class="btn" id="localBtn" style="background:#243040;color:#DCE6F0">Play on this screen</button>
       <div class="stepper">
         <span>AI drivers</span>
         <button id="aiMinus">–</button><b id="aiCount">3</b><button id="aiPlus">+</button>
@@ -1240,7 +1241,48 @@ function onData(conn,d){
   }
   if(d.t==='ping') conn.send({t:'pong',c:d.c,now:performance.now()});
 }
-function broadcast(msg){ players.forEach(p=>{ try{p.conn.send(msg);}catch(e){} }); }
+/* ---------- local player: drive on the host screen with WASD ---------- */
+let localPlayer=null;
+const lk={}, LKEYS=['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright',' ','r'];
+let localSteer=0;
+addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(!LKEYS.includes(k)) return;
+  if(localPlayer && state.phase!=='lobby') e.preventDefault();
+  lk[k]=1;
+  if(k==='r'&&localPlayer) localPlayer.input.reset=1;
+});
+addEventListener('keyup',e=>{ lk[e.key.toLowerCase()]=0; });
+function updateLocalInput(dt){
+  if(!localPlayer) return;
+  const i=localPlayer.input;
+  if(state.phase!=='race'){ i.steer=0;i.throttle=0;i.brake=0;i.handbrake=0; localSteer=0; return; }
+  const t=((lk['d']||lk['arrowright'])?1:0)-((lk['a']||lk['arrowleft'])?1:0);
+  localSteer+=clamp(t-localSteer,-4.5*dt,4.5*dt);
+  if(!t) localSteer*=Math.exp(-7*dt);
+  i.steer=clamp(localSteer,-1,1);
+  i.throttle=(lk['w']||lk['arrowup'])?1:0;
+  i.brake=(lk['s']||lk['arrowdown'])?1:0;
+  i.handbrake=lk[' ']?1:0;
+}
+function toggleLocalPlayer(){
+  if(localPlayer){
+    players.delete('local'); localPlayer=null;
+    $('#localBtn').textContent='Play on this screen';
+    $('#localBtn').style.background='#243040';
+  } else {
+    const idx=players.size;
+    localPlayer={id:'local',name:'You',device:'this screen',conn:null,local:true,
+      color:CAR_COLORS[idx%CAR_COLORS.length],
+      input:{steer:0,throttle:0,brake:0,handbrake:0,reset:0}};
+    players.set('local',localPlayer);
+    $('#localBtn').textContent='Leave the race';
+    $('#localBtn').style.background='#FF7A18';
+  }
+  renderRoster();
+}
+
+function broadcast(msg){ players.forEach(p=>{ if(!p.conn) return; try{p.conn.send(msg);}catch(e){} }); }
 
 function renderRoster(){
   const el=$('#roster');
@@ -1378,6 +1420,7 @@ function frame(now){
   }
 
   if(state.phase==='race'||state.phase==='countdown'){
+    updateLocalInput(dt);
     const scale=director.slowmo;
     acc+=dt*scale;
     let iter=0;
@@ -1448,7 +1491,7 @@ function frame(now){
     hudAcc+=dt; if(hudAcc>0.1){ hudAcc=0; updateHUD(); }
     telAcc+=dt; if(telAcc>0.12){ telAcc=0;
       for(const c of cars){ if(c.isBot) continue;
-        const p=players.get(c.id); if(!p||p.gone) continue;
+        const p=players.get(c.id); if(!p||p.gone||!p.conn) continue;
         try{p.conn.send({t:'tel',v:Math.round(c.speed*3.6),g:c.gear===0?'R':c.gear===1?'N':c.gear-1,
           rpm:Math.round(c.rpm),pos:c.pos_,of:cars.length,dmg:Math.round(c.damage),
           air:c.airTime>0.4?1:0,crash:c.crashT>1.4?1:0,pct:Math.round(c.progress/track.length*100)});}catch(e){}
@@ -1474,6 +1517,7 @@ try{
 renderLevels(); renderRoster(); initNet();
 
 $('#startBtn').onclick=startRace;
+$('#localBtn').onclick=toggleLocalPlayer;
 $('#aiPlus').onclick=()=>{aiCount=Math.min(9,aiCount+1);$('#aiCount').textContent=aiCount;};
 $('#aiMinus').onclick=()=>{aiCount=Math.max(0,aiCount-1);$('#aiCount').textContent=aiCount;};
 $('#againBtn').onclick=()=>{
