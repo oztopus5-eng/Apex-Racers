@@ -154,6 +154,8 @@ const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const isTouch=matchMedia('(pointer:coarse)').matches||'ontouchstart' in window;
 let mode = isTouch?'tilt':'keys';
+let driving=false;
+const held={};
 
 function setMode(m){
   mode=m;
@@ -308,10 +310,8 @@ $('#resetCar').onclick=()=>{ input.r=1; buzz(25); };
 $('#sens').onclick=e=>{ sensDeg=SENS[(SENS.indexOf(sensDeg)+1)%SENS.length]; e.target.textContent='Sensitivity: '+sensDeg+'°'; };
 
 /* ---------- keyboard ---------- */
-const held={};
 const KEYMAP={w:'kW',a:'kA',s:'kS',d:'kD',' ':'kSpace',
   arrowup:'kW',arrowleft:'kA',arrowdown:'kS',arrowright:'kD'};
-let driving=false;
 const typingInField=e=>{
   const t=e.target;
   return t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable);
